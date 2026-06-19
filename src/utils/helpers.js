@@ -60,23 +60,33 @@ export function jidToNum(jid) {
 }
 
 /**
- * Formate un JID pour mention WhatsApp (juste le numéro)
- * @param {string} jid
+ * Formate un JID pour mention WhatsApp réelle.
+ * Le texte doit contenir le JID complet (ex: "237691234567@s.whatsapp.net")
+ * précédé d'un "@" pour que Baileys le reconnaisse comme une vraie mention.
+ * La partie visible affichée par WhatsApp sera uniquement le numéro.
+ * @param {string} jid - JID complet, ex: "237691234567@s.whatsapp.net"
  * @returns {string}
  */
 export function jidToMention(jid) {
-  return "@" + jidToNum(jid);
+  if (!jid) return "@inconnu";
+  // Normalise le JID : on s'assure qu'il se termine par @s.whatsapp.net
+  // (les JIDs de groupe d'un participant sont déjà sous cette forme)
+  const normalized = jid.includes("@") ? jid : jid + "@s.whatsapp.net";
+  // WhatsApp affiche uniquement le numéro, mais le JID complet doit être
+  // présent dans le texte pour que l'API le reconnaisse comme une mention.
+  return "@" + normalized;
 }
 
 /**
- * Formate la liste des joueurs vivants pour affichage
- * @param {Array} joueurs
+ * Formate la liste des joueurs vivants pour affichage.
+ * Affiche le pseudo ET insère la vraie mention WhatsApp.
+ * @param {Array} joueurs - chaque joueur a { id, jid, pseudo }
  * @returns {string}
  */
 export function formaterListeJoueurs(joueurs) {
   if (!joueurs || joueurs.length === 0) return "Aucun joueur.";
   return joueurs
-    .map((j) => `${j.id} - ${jidToMention(j.jid)}`)
+    .map((j) => `${j.id} - ${jidToMention(j.jid)} (${j.pseudo || jidToNum(j.jid)})`)
     .join("\n");
 }
 
