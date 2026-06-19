@@ -491,11 +491,14 @@ class Bot {
   }
 
   _extraireMentions(texte) {
-    // jidToMention() écrit "@237xxxxxxx@s.whatsapp.net" dans le texte.
-    // On extrait ces JIDs complets pour les passer à sendMessage({ mentions })
-    // ce qui déclenche les vraies mentions cliquables dans WhatsApp.
-    const jids = texte.match(/\d+@(?:s\.whatsapp\.net|g\.us)/g);
-    return jids ? [...new Set(jids)] : undefined;
+    // jidToMention() écrit "@237xxxxxxx" dans le texte (numéro seul).
+    // On extrait ces numéros et on reconstruit les JIDs complets
+    // pour les passer dans mentions[] — c'est ce tableau qui déclenche
+    // la vraie mention cliquable côté WhatsApp.
+    const nums = texte.match(/@(\d{6,15})(?!\d|@)/g);
+    if (!nums) return undefined;
+    const jids = [...new Set(nums)].map((n) => n.slice(1) + "@s.whatsapp.net");
+    return jids.length ? jids : undefined;
   }
 
   async envoyerMessagePrive(jid, texte) {
