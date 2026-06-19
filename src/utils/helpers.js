@@ -78,20 +78,10 @@ export function jidToNum(jid) {
  */
 export function jidToMention(jid) {
   if (!jid) return "@inconnu";
-
-  // Cas @lid non résolu : on ne peut pas créer de mention valide.
-  // On retourne juste le numéro visible (@xxxx) sans le suffixe @lid
-  // pour ne pas polluer le texte avec un JID non mentionnable.
-  if (jid.endsWith("@lid")) {
-    const num = jid.replace(/@lid$/, "").split(":")[0];
-    return "@" + num; // texte visible seulement, pas de mention déclenchée
-  }
-
-  // JID standard @s.whatsapp.net ou @g.us :
-  // on l'intègre EN ENTIER dans le texte → Baileys peut l'extraire et créer
-  // la mention cliquable via le champ `mentions` de sendMessage.
-  const normalized = jid.includes("@") ? jid : jid + "@s.whatsapp.net";
-  return "@" + normalized; // ex: "@237691234567@s.whatsapp.net"
+  // Le texte doit contenir UNIQUEMENT "@numéro" — WhatsApp l'affiche en bleu.
+  // Le JID complet (237xxx@s.whatsapp.net) est fourni séparément dans le
+  // tableau `mentions` de sendMessage (voir _extraireMentions dans index.js).
+  return "@" + jidToNum(jid); // ex: "@237691234567"
 }
 
 /**
