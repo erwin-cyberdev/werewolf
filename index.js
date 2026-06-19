@@ -258,6 +258,10 @@ class Bot {
           closedOnce = false;
           console.log(chalk.green.bold("✅ Bot connecté avec succès !"));
           await this.chargerPartie();
+          // Pré-remplir le mapping LID→PN si une partie est déjà en cours
+          if (this.game.groupeJid) {
+            await this._syncGroupLidMap(this.game.groupeJid);
+          }
         }
 
         // ── Déconnecté ────────────────────────────────────────────────────
@@ -425,6 +429,31 @@ class Bot {
     }
   }
 
+  /**
+   * Récupère les métadonnées du groupe et pré-remplit _lidMap avec
+   * tous les mappings LID↔PN des participants, sans attendre qu'ils
+   * envoient un message.
+   */
+  async _syncGroupLidMap(groupJid) {
+    try {
+      const meta = await this.sock.groupMetadata(groupJid);
+      for (const p of meta.participants) {
+        // Cas 1 : id est un @lid et phoneNumber est le @s.whatsapp.net
+        if (p.id?.endsWith("@lid") && p.phoneNumber) {
+          this._lidMap.set(p.id, p.phoneNumber);
+          console.log(chalk.gray(`[LID-SYNC] ${p.id} → ${p.phoneNumber}`));
+        }
+        // Cas 2 : id est un @s.whatsapp.net et lid est le @lid correspondant
+        if (p.lid && p.id?.endsWith("@s.whatsapp.net")) {
+          this._lidMap.set(p.lid, p.id);
+          console.log(chalk.gray(`[LID-SYNC] ${p.lid} → ${p.id}`));
+        }
+      }
+    } catch (e) {
+      console.error(chalk.red("[LID-SYNC] Échec groupMetadata :"), e.message);
+    }
+  }
+
   async traiterGroupe(jid, sender, pseudo, cmd, args, msg) {
     const g = this.game;
 
@@ -436,9 +465,11 @@ class Bot {
 
     switch (cmd) {
       case "start": case "lancer":
+        await this._syncGroupLidMap(jid);
         await g.lancerPartie(jid, sender, args[0] || pseudo);
         break;
       case "join":
+        await this._syncGroupLidMap(jid);
         await g.ajouterJoueur(sender, args[0] || pseudo);
         break;
       case "addtime":
