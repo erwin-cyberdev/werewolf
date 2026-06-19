@@ -60,21 +60,38 @@ export function jidToNum(jid) {
 }
 
 /**
- * Formate un JID pour mention WhatsApp réelle.
- * Le texte doit contenir le JID complet (ex: "237691234567@s.whatsapp.net")
- * précédé d'un "@" pour que Baileys le reconnaisse comme une vraie mention.
- * La partie visible affichée par WhatsApp sera uniquement le numéro.
- * @param {string} jid - JID complet, ex: "237691234567@s.whatsapp.net"
+ * Formate un JID pour déclencher une vraie mention WhatsApp.
+ *
+ * Règles Baileys pour les mentions :
+ *  1. Le texte du message doit contenir le JID complet sous la forme
+ *     "@<numero>@s.whatsapp.net" (ou "@g.us" pour un groupe).
+ *  2. Ce même JID doit être présent dans le tableau `mentions` passé à
+ *     sendMessage — c'est _extraireMentions() dans index.js qui s'en charge.
+ *
+ * Les groupes en mode "LID" (WhatsApp v2+) retournent parfois des participants
+ * sous la forme "25676035928189@lid". Ce format N'EST PAS un JID mentionnable.
+ * Si un @lid arrive ici c'est que le mapping LID→PN n'est pas encore résolu ;
+ * dans ce cas on affiche le numéro brut sans créer de mention (texte fallback).
+ *
+ * @param {string} jid - JID du joueur, idéalement "237xxxxxxx@s.whatsapp.net"
  * @returns {string}
  */
 export function jidToMention(jid) {
   if (!jid) return "@inconnu";
-  // Normalise le JID : on s'assure qu'il se termine par @s.whatsapp.net
-  // (les JIDs de groupe d'un participant sont déjà sous cette forme)
+
+  // Cas @lid non résolu : on ne peut pas créer de mention valide.
+  // On retourne juste le numéro visible (@xxxx) sans le suffixe @lid
+  // pour ne pas polluer le texte avec un JID non mentionnable.
+  if (jid.endsWith("@lid")) {
+    const num = jid.replace(/@lid$/, "").split(":")[0];
+    return "@" + num; // texte visible seulement, pas de mention déclenchée
+  }
+
+  // JID standard @s.whatsapp.net ou @g.us :
+  // on l'intègre EN ENTIER dans le texte → Baileys peut l'extraire et créer
+  // la mention cliquable via le champ `mentions` de sendMessage.
   const normalized = jid.includes("@") ? jid : jid + "@s.whatsapp.net";
-  // WhatsApp affiche uniquement le numéro, mais le JID complet doit être
-  // présent dans le texte pour que l'API le reconnaisse comme une mention.
-  return "@" + normalized;
+  return "@" + normalized; // ex: "@237691234567@s.whatsapp.net"
 }
 
 /**
