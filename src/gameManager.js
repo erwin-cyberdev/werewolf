@@ -521,6 +521,10 @@ class GameManager {
         await this.bot.envoyerMessage(this.groupeJid,
           msg.msgResultatVote(elimine.pseudo, elimine.jid, resultat.maxVotes, resultat.totalVotes));
 
+        // ── Révélation du rôle ──────────────────────────────────────────────
+        await this.bot.envoyerMessage(this.groupeJid,
+          `🪦 ${jidToMention(elimine.jid)} était *${elimine.role}*`);
+
         // Vérifier si c'est le Tanneur
         const estTanneur = elimine.role === CONFIG.ROLES.TANNEUR;
 
@@ -596,6 +600,10 @@ class GameManager {
 
               await this.bot.envoyerMessage(this.groupeJid,
                 `👑 Le Maire (${jidToMention(maire.jid)}) a tranché : ${jidToMention(elimine.jid)} est éliminé !`);
+
+              // ── Révélation du rôle ────────────────────────────────────────
+              await this.bot.envoyerMessage(this.groupeJid,
+                `🪦 ${jidToMention(elimine.jid)} était *${elimine.role}*`);
 
               this.players.tuer(elimine.id);
               await this.verifierFinDeJour();
@@ -680,6 +688,10 @@ class GameManager {
       this.players.tuer(joueur.id);
     }
 
+    // ── Révélation du rôle de la cible ──────────────────────────────────────
+    await this.bot.envoyerMessage(this.groupeJid,
+      `🪦 ${jidToMention(cible.jid)} était *${cible.role}*`);
+
     if (mort?.amoureux) {
       await this.bot.envoyerMessage(this.groupeJid,
         msg.msgMortAmoureux(mort.amoureux.pseudo));
@@ -705,6 +717,9 @@ class GameManager {
     const mort = this.players.tuer(cible.id);
     await this.bot.envoyerMessage(this.groupeJid,
       msg.msgChasseurTire(cible.pseudo));
+    // ── Révélation du rôle ────────────────────────────────────────────────
+    await this.bot.envoyerMessage(this.groupeJid,
+      `🪦 ${jidToMention(cible.jid)} était *${cible.role}*`);
 
     if (mort?.amoureux) {
       await this.bot.envoyerMessage(this.groupeJid,
