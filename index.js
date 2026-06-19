@@ -489,6 +489,9 @@ class Bot {
       case "menu":
         await this.envoyerMessage(jid, this.msgMenu());
         break;
+      case "rule": case "rules": case "regles": case "règles":
+        await this.envoyerMessage(jid, this.msgRegles());
+        break;
       case "skip":
         await g.skipPhase();
         break;
@@ -550,7 +553,8 @@ class Bot {
       `\`${p}statut\` — Voir l'état de la partie`,
       `\`${p}skip\` — Passer à la phase suivante`,
       `\`${p}ping\` — Tester la latence`,
-      `\`${p}menu\` — Afficher ce menu\n`,
+      `\`${p}menu\` — Afficher ce menu`,
+      `\`${p}rule\` — Afficher les règles\n`,
       "*Message privé (pendant la partie) :*",
       "`-tuer`, `-devorer`, `-voir`, `-proteger`",
       "`-lier`, `-parier`, `-contaminer`, `-poser`",
@@ -561,7 +565,62 @@ class Bot {
     ].join("\n");
   }
 
-  // ─── Sauvegarde ──────────────────────────────────────────────────────────────
+  msgRegles() {
+    const p = CONFIG.PREFIXE;
+    return [
+      "📖 *Règles du Loup-Garou*\n",
+
+      "🎯 *Objectif*",
+      "Les *Villageois* doivent éliminer tous les Loups.",
+      "Les *Loups* doivent égaler ou dépasser le nombre de Villageois.",
+      "Les *Solitaires* ont chacun leur propre condition de victoire.\n",
+
+      "🔄 *Déroulement*",
+      "La partie alterne entre phases de *Nuit* et phases de *Jour*.\n",
+
+      "🌙 *Nuit* — chaque rôle actif reçoit ses instructions en MP :",
+      "• 🐺 *Loup-Garou* — dévore un joueur (`-tuer [id]`)",
+      "• 🖤 *Loup Noir* — dévore ou infecte une victime (`-infecter [id]`)",
+      "• 🤍 *Loup Blanc* — dévore n'importe qui une nuit sur deux (`-devorer [id]`)",
+      "• 💬 *Loup Bavard* — dévore, puis doit placer un mot secret dans le chat de jour",
+      "• 🔮 *Voyante* — découvre le rôle d'un joueur (`-voir [id]`)",
+      "• 🧪 *Sorcière* — sauve la victime ou empoisonne quelqu'un (`-sauver` / `-empoisonner [id]`)",
+      "• 🛡️ *Garde* — protège un joueur des Loups (`-proteger [id]`)",
+      "• 💘 *Cupidon* — lie deux amoureux (1ʳᵉ nuit uniquement) (`-lier [id1] [id2]`)",
+      "• 🐀 *Rat Malade* — contamine deux joueurs (`-contaminer [id1] [id2]`)",
+      "• 🔥 *Pyromancien* — pose un tonneau ou fait tout exploser (`-poser [id]` / `-exploser`)",
+      "• 👑 *Héritier* — choisit son testataire (1ʳᵉ nuit) (`-choisir [id]`)",
+      "• 👺 *Nain Tracassin* — parie sur le rôle d'un joueur (`-parier [id] [rôle]`)",
+      "• 🔮 *Le Fou* — croit être la Voyante mais obtient de faux résultats\n",
+
+      "☀️ *Jour* — le village débat puis vote :",
+      "• Chaque survivant vote en MP pour éliminer un suspect (`-voter [id]`)",
+      "• En cas d'égalité, le *Maire* tranche (`-trancher [id]`)",
+      "• Le rôle du joueur éliminé est révélé à tout le groupe\n",
+
+      "👑 *Élection du Maire* (phase 1)",
+      "• Vote en MP : `-maire [id]`",
+      "• Le Maire a double vote lors des égalités\n",
+
+      "⚡ *Pouvoirs spéciaux hors nuit*",
+      "• 🔫 *Chasseur* — à sa mort, tire sur un joueur (`-tirer [id]`)",
+      "• ⚡ *Dictateur* — élimine un joueur sans vote, une seule fois (`-coup [id]`)",
+      "• ⚰️ *Fossoyeur* — à sa mort, révèle deux rôles (`-designer [id]`)\n",
+
+      "💕 *Amoureux* (Cupidon)",
+      "• Si l'un meurt, l'autre meurt aussi.",
+      "• S'ils sont de camps opposés et derniers survivants → ils gagnent ensemble.\n",
+
+      "🎖️ *Rôles solitaires*",
+      `• 🤍 *Loup Blanc* — gagne seul, dernier survivant`,
+      `• 🎯 *Mercenaire* — gagne si sa cible est éliminée au vote du jour 1`,
+      `• 👺 *Nain Tracassin* — gagne s'il est parmi les 2 derniers`,
+      `• 🐀 *Rat Malade* — gagne si tous les vivants sont contaminés`,
+      `• 🪡 *Tanneur* — gagne s'il est éliminé par le vote du village\n`,
+
+      `_Tapez \`${p}menu\` pour les commandes._`,
+    ].join("\n");
+  }
 
   sauvegarderPartie(donnees) {
     try {
