@@ -24,7 +24,121 @@ import { msgPing } from "./src/utils/messages.js";
 
 const logger = pino({ level: "silent" });
 const AUTH_DIR = path.resolve(process.cwd(), "auth_info");
-const QR_PORT = process.env.QR_PORT || 3000;
+const QR_PORT = process.env.PORT || process.env.QR_PORT || 3000;
+
+// ─── Serveur HTTP pour afficher le QR Code via /qr ───────────────────────────
+
+let currentQrData = null; // Stocke le dernier QR code brut
+
+const httpServer = createServer(async (req, res) => {
+  const url = new URL(req.url, `http://localhost`);
+
+  if (url.pathname === "/qr") {
+    if (!currentQrData) {
+      // Pas encore de QR code disponible
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(`<!DOCTYPE html>
+      <html lang="fr">
+      <head>
+      <meta charset="UTF-8" />
+      <meta http-equiv="refresh" content="5" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Loup-Garou Bot — QR Code</title>
+      <style>
+      body { font-family: sans-serif; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; min-height: 100vh;
+        margin: 0; background: #0a0a0a; color: #e0e0e0; }
+        .card { background: #1a1a2e; border-radius: 16px; padding: 40px;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.5); text-align: center; max-width: 420px; }
+          h1 { color: #7fdd47; margin-bottom: 8px; }
+          p { color: #aaa; margin-bottom: 0; }
+          .loader { width: 48px; height: 48px; border: 5px solid #333;
+            border-top-color: #7fdd47; border-radius: 50%;
+            animation: spin 1s linear infinite; margin: 24px auto; }
+            @keyframes spin { to { transform: rotate(360deg); } }
+            </style>
+            </head>
+            <body>
+            <div class="card">
+            <h1>🐺 Loup-Garou Bot</h1>
+            <div class="loader"></div>
+            <p>En attente du QR code…<br/>La page se rafraîchit automatiquement.</p>
+            </div>
+            </body>
+            </html>`);
+      return;
+    }
+
+    // Générer l'image PNG du QR code
+    try {
+      const qrImageBase64 = await QRCode.toDataURL(currentQrData, {
+        width: 300,
+        margin: 2,
+        color: { dark: "#000000", light: "#ffffff" },
+      });
+
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(`<!DOCTYPE html>
+      <html lang="fr">
+      <head>
+      <meta charset="UTF-8" />
+      <meta http-equiv="refresh" content="30" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Loup-Garou Bot — Scanner le QR Code</title>
+      <style>
+      body { font-family: sans-serif; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; min-height: 100vh;
+        margin: 0; background: #0a0a0a; color: #e0e0e0; }
+        .card { background: #1a1a2e; border-radius: 16px; padding: 40px;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.5); text-align: center; max-width: 420px; }
+          h1 { color: #7fdd47; margin-bottom: 8px; }
+          .subtitle { color: #aaa; font-size: 0.9rem; margin-bottom: 24px; }
+          img { border-radius: 12px; border: 4px solid #7fdd47;
+            box-shadow: 0 0 24px rgba(127,221,71,0.3); }
+            .steps { text-align: left; margin-top: 24px; color: #bbb; font-size: 0.85rem; line-height: 1.7; }
+            .steps b { color: #7fdd47; }
+            .refresh { margin-top: 16px; font-size: 0.75rem; color: #555; }
+            </style>
+            </head>
+            <body>
+            <div class="card">
+            <h1>🐺 Loup-Garou Bot</h1>
+            <p class="subtitle">Scannez ce QR code avec WhatsApp</p>
+            <img src="${qrImageBase64}" alt="QR Code WhatsApp" width="260" height="260" />
+            <div class="steps">
+            <b>1.</b> Ouvrez WhatsApp sur votre téléphone<br/>
+            <b>2.</b> Allez dans <b>Paramètres › Appareils liés</b><br/>
+            <b>3.</b> Appuyez sur <b>Lier un appareil</b><br/>
+            <b>4.</b> Scannez ce code
+            </div>
+            <p class="refresh">⟳ Page rafraîchie automatiquement toutes les 30 s</p>
+            </div>
+            </body>
+            </html>`);
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "text/plain" });
+      res.end("Erreur génération QR : " + err.message);
+    }
+    return;
+  }
+
+  // Route racine — redirection vers /qr
+  if (url.pathname === "/") {
+    res.writeHead(302, { Location: "/qr" });
+    res.end();
+    return;
+  }
+
+  // Toute autre route
+  res.writeHead(404, { "Content-Type": "text/plain" });
+  res.end("404 — Page non trouvée");
+});
+
+httpServer.listen(QR_PORT, () => {
+  console.log(chalk.cyan(`🌐 Serveur QR démarré sur le port ${QR_PORT} — accédez à /qr pour scanner`));
+});
+
+// ─── Bot ─────────────────────────────────────────────────────────────────────
 
 class Bot {
   constructor() {
@@ -34,7 +148,7 @@ class Bot {
     this.isStarting = false;
     this.lastQr = null;
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 10; // Limite les tentatives de reconnexion
+    this.maxReconnectAttempts = 10;
   }
 
   /** Backoff exponentiel, plafonné à 5 min */
@@ -76,13 +190,11 @@ class Bot {
         markOnlineOnConnect: false,
         connectTimeoutMs: 60_000,
         defaultQueryTimeoutMs: 60_000,
-        keepAliveIntervalMs: 30_000,
-        retryRequestDelayMs: 3_000,
-        // Option nécessaire pour éviter certains bugs de reconnexion
-        syncFullHistory: false,
+          keepAliveIntervalMs: 30_000,
+          retryRequestDelayMs: 3_000,
+          syncFullHistory: false,
       });
 
-      // Un seul traitement de "close" par socket
       let closedOnce = false;
 
       this.sock.ev.on("creds.update", async (creds) => {
@@ -97,13 +209,16 @@ class Bot {
         // ── QR Code ──────────────────────────────────────────────────────
         if (qr && qr !== this.lastQr) {
           this.lastQr = qr;
+          currentQrData = qr; // ← expose au serveur HTTP
+
           console.clear();
           console.log(chalk.cyan("\n" + "═".repeat(50)));
           console.log(chalk.green.bold("  📱 SCANNEZ LE QR CODE AVEC WHATSAPP"));
           console.log(chalk.gray("  Paramètres › Appareils liés › Lier un appareil"));
+          console.log(chalk.cyan(`  Ou visitez : http://localhost:${QR_PORT}/qr`));
           console.log(chalk.cyan("═".repeat(50) + "\n"));
-          
-          // Afficher réellement le QR Code dans le terminal
+
+          // Afficher aussi dans le terminal
           qrcode.generate(qr, { small: true });
         }
 
@@ -112,6 +227,7 @@ class Bot {
           this.connected = true;
           this.reconnectAttempts = 0;
           this.lastQr = null;
+          currentQrData = null; // ← efface le QR une fois connecté
           closedOnce = false;
           console.log(chalk.green.bold("✅ Bot connecté avec succès !"));
           await this.chargerPartie();
@@ -122,6 +238,7 @@ class Bot {
           closedOnce = true;
           this.connected = false;
           this.lastQr = null;
+          currentQrData = null;
 
           const statusCode = lastDisconnect?.error?.output?.statusCode;
           const error = lastDisconnect?.error;
@@ -132,14 +249,12 @@ class Bot {
           }
           this._destroySocket();
 
-          // Vérifier si on a atteint la limite de tentatives
           if (this.reconnectAttempts >= this.maxReconnectAttempts) {
             console.log(chalk.red(`❌ Nombre maximum de tentatives (${this.maxReconnectAttempts}) atteint. Arrêt du bot.`));
             this.isStarting = false;
             return;
           }
 
-          // 401 / 405 / loggedOut = session révoquée → effacer et nouveau QR
           if (statusCode === DisconnectReason.loggedOut || statusCode === 401 || statusCode === 405) {
             console.log(chalk.red("🚫 Session révoquée. Effacement et nouveau QR dans 5 s…"));
             try {
@@ -154,7 +269,6 @@ class Bot {
             return;
           }
 
-          // Autres erreurs réseau → backoff exponentiel
           this.reconnectAttempts++;
           const delay = this._delay();
           console.log(chalk.blue(`🔄 Reconnexion dans ${Math.round(delay / 1000)} s (tentative ${this.reconnectAttempts}/${this.maxReconnectAttempts})…`));
@@ -172,7 +286,6 @@ class Bot {
       console.error(chalk.red("Erreur initialisation :"), err.message);
       this._destroySocket();
 
-      // Vérifier si on a atteint la limite de tentatives
       if (this.reconnectAttempts >= this.maxReconnectAttempts) {
         console.log(chalk.red(`❌ Nombre maximum de tentatives atteint. Arrêt du bot.`));
         this.isStarting = false;
@@ -207,8 +320,7 @@ class Bot {
 
     const jid     = getJid(msg);
     const sender  = getSender(msg);
-    
-    // Logger les messages reçus
+
     console.log(chalk.gray(`[MSG] De: ${sender} | Dans: ${jid} | Contenu: "${texte}"`));
     const estPrive = isPrivateChat(jid);
     const { cmd, args } = parserCommande(texte, CONFIG.PREFIXE);
@@ -229,7 +341,6 @@ class Bot {
   }
 
   async traiterPrive(jid, pseudo, cmd, args, msg) {
-    // Commande ping disponible partout, même en privé
     if (cmd === "ping") {
       const latence = Date.now() - (msg?.messageTimestamp * 1000 || Date.now());
       await this.envoyerMessage(jid, msgPing(Math.max(0, latence)));
@@ -290,7 +401,6 @@ class Bot {
   async traiterGroupe(jid, sender, pseudo, cmd, args, msg) {
     const g = this.game;
 
-    // Commande ping — disponible sans partie en cours
     if (cmd === "ping") {
       const latence = Date.now() - (msg?.messageTimestamp * 1000 || Date.now());
       await this.envoyerMessage(jid, msgPing(Math.max(0, latence)));
@@ -316,7 +426,7 @@ class Bot {
       case "statut": case "status":
         if (jid !== g.groupeJid) return;
         await g.afficherStatut();
-        break;
+      break;
       case "help": case "aide":
       case "menu":
         await this.envoyerMessage(jid, this.msgMenu());
@@ -353,7 +463,6 @@ class Bot {
     }
   }
 
-  /** Extrait les JIDs WhatsApp du texte pour les transformer en vraies mentions */
   _extraireMentions(texte) {
     const jids = texte.match(/[\d]+@[sw]\.whatsapp\.net/g);
     return jids ? [...new Set(jids)] : undefined;
