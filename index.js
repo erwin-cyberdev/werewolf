@@ -464,7 +464,10 @@ class Bot {
   }
 
   _extraireMentions(texte) {
-    const jids = texte.match(/[\d]+@[sw]\.whatsapp\.net/g);
+    // jidToMention() écrit "@237xxxxxxx@s.whatsapp.net" ou "@237xxxxxxx@g.us"
+    // dans le texte. On extrait ces JIDs complets pour les passer à l'API
+    // WhatsApp qui les convertit en véritables mentions cliquables.
+    const jids = texte.match(/\d+@(?:s\.whatsapp\.net|g\.us)/g);
     return jids ? [...new Set(jids)] : undefined;
   }
 
