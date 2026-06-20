@@ -591,7 +591,8 @@ class Bot {
       "• 🔥 *Pyromancien* — pose un tonneau ou fait tout exploser (`-poser [id]` / `-exploser`)",
       "• 👑 *Héritier* — choisit son testataire (1ʳᵉ nuit) (`-choisir [id]`)",
       "• 👺 *Nain Tracassin* — parie sur le rôle d'un joueur (`-parier [id] [rôle]`)",
-      "• 🔮 *Le Fou* — croit être la Voyante mais obtient de faux résultats\n",
+      "• 🔮 *Le Fou* — croit être la Voyante mais obtient de faux résultats",
+      "• 🔫 *Chasseur* — peut tirer une fois par nuit avec l'une de ses 2 balles (`-tirer [id]`)\n",
 
       "☀️ *Jour* — le village débat puis vote :",
       "• Chaque survivant vote en MP pour éliminer un suspect (`-voter [id]`)",
@@ -602,9 +603,9 @@ class Bot {
       "• Vote en MP : `-maire [id]`",
       "• Le Maire a double vote lors des égalités\n",
 
-      "⚡ *Pouvoirs spéciaux hors nuit*",
-      "• 🔫 *Chasseur* — à sa mort, tire sur un joueur (`-tirer [id]`)",
-      "• ⚡ *Dictateur* — élimine un joueur sans vote, une seule fois (`-coup [id]`)",
+      "⚡ *Pouvoirs spéciaux*",
+      "• 🔫 *Chasseur* — possède 2 balles, peut en tirer 1 par nuit pour abattre qui il veut (`-tirer [id]`)",
+      "• ⚡ *Dictateur* — élimine un joueur sans vote, une seule fois mais à n'importe quel tour (`-coup [id]`)",
       "• ⚰️ *Fossoyeur* — à sa mort, révèle deux rôles (`-designer [id]`)\n",
 
       "💕 *Amoureux* (Cupidon)",
