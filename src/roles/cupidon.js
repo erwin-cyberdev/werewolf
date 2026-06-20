@@ -1,8 +1,16 @@
 // ===== Rôle : Cupidon =====
-// La nuit 1 uniquement, désigne 2 amoureux.
-// Si l'un meurt, l'autre meurt immédiatement.
-// Amoureux de camps opposés → doivent éliminer tout le monde pour gagner ensemble.
-// Après la nuit 1, Cupidon devient Simple Villageois.
+// NOTE : ce fichier sert de documentation du rôle. La logique réelle est
+// implémentée dans nightManager.js (résolution de l'action "lier") et
+// gameManager.js (envoi des instructions + notification des amoureux).
+//
+// La nuit 1 UNIQUEMENT, le bot envoie automatiquement à Cupidon ses
+// instructions lui demandant s'il veut lier deux joueurs (`-lier [id1] [id2]`).
+// Passé la nuit 1, Cupidon ne peut plus agir.
+//
+// Les deux joueurs désignés sont notifiés en privé de leur nouveau statut
+// d'amoureux.
+// Si l'un des deux meurt, l'autre meurt aussitôt de chagrin.
+// S'ils sont les deux seuls survivants de la partie, ils gagnent ensemble.
 
 export default {
   nom: "Cupidon",
@@ -25,11 +33,5 @@ export default {
 
   async onDeath(bot, joueur, game) {
     // Rien de spécial
-  },
-
-  /** Après la nuit 1, Cupidon devient Villageois */
-  onAfterNuit1(bot, joueur, game) {
-    joueur.role = "Simple Villageois";
-    joueur.camp = "villageois";
   },
 };
