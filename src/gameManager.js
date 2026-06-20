@@ -153,6 +153,13 @@ class GameManager {
     this.donnees.mortsNuit = [];
     this.donnees.dictateurActif = false;
 
+    // Le Chasseur peut tirer à nouveau cette nuit (s'il a des balles restantes)
+    for (const j of this.players.getVivants()) {
+      if (j.role === CONFIG.ROLES.CHASSEUR) {
+        j.aTireCetteNuit = false;
+      }
+    }
+
     // Si c'est la nuit 1 et qu'il y a un Mercenaire, on lui donne sa cible au lever du jour 1
     // Donc on ne fait rien de spécial ici pour le Mercenaire
 
@@ -192,6 +199,14 @@ class GameManager {
     const isNuit1 = this.nuits.phaseNuit === 1;
 
     for (const joueur of vivants) {
+      // ── Joueur infecté par le Loup Noir : il agit désormais comme un Loup ──
+      // (ses anciennes actions de rôle sont remplacées par les actions de Loup)
+      if (joueur.estInfecte) {
+        await this.bot.envoyerMessagePrive(joueur.jid,
+          msg.mpLoupInstructions(vivants));
+        continue;
+      }
+
       switch (joueur.role) {
         case CONFIG.ROLES.LOUP_GAROU:
           await this.bot.envoyerMessagePrive(joueur.jid,
@@ -274,6 +289,16 @@ class GameManager {
               msg.mpHeritierInstructions(vivants));
           }
           break;
+
+        case CONFIG.ROLES.CHASSEUR:
+          if (joueur.ballesChasseur > 0) {
+            await this.bot.envoyerMessagePrive(joueur.jid,
+              msg.mpChasseurInstructions(
+                vivants.filter((j) => j.id !== joueur.id),
+                joueur.ballesChasseur
+              ));
+          }
+          break;
       }
     }
   }
@@ -291,7 +316,7 @@ class GameManager {
     } else {
       for (const mort of this.donnees.mortsNuit) {
         await this.bot.envoyerMessage(this.groupeJid,
-          msg.msgMortNuit(mort.joueur.pseudo, mort.joueur.jid, mort.joueur.role));
+          msg.msgMortCause(mort.joueur.pseudo, mort.joueur.jid, mort.joueur.role, mort.cause));
         // Si le joueur mort est Le Fou, lui révéler son vrai rôle en MP
         if (mort.joueur.role === CONFIG.ROLES.FOU) {
           await this.bot.envoyerMessagePrive(
@@ -343,18 +368,10 @@ class GameManager {
         msg.mpFossoyeurInstructions(this.players.getVivants()));
     }
 
-    // Gestion du Chasseur
-    const chasseurMort = this.donnees.mortsNuit.find(
-      (m) => m.joueur.role === CONFIG.ROLES.CHASSEUR
-    );
-    if (chasseurMort) {
-      this.actionsEnAttente.push({
-        type: "chasseur",
-        joueur: chasseurMort.joueur,
-      });
-      await this.bot.envoyerMessagePrive(chasseurMort.joueur.jid,
-        msg.mpChasseurInstructions(this.players.getVivants()));
-    }
+    // Gestion du Chasseur : SUPPRIMÉE — le Chasseur agit désormais de son vivant,
+    // chaque nuit, via `-tirer [id]` (voir actionChasseur), avec 2 balles au total
+    // (1 utilisable par nuit). Voir envoyerInstructionsNuit() pour l'envoi des
+    // instructions et actionChasseur() pour la résolution immédiate du tir.
 
     // Envoyer les résultats aux rôles concernés (Voyante)
     for (const vu of resultats.vus || []) {
@@ -371,6 +388,19 @@ class GameManager {
     // Notifier les contaminés
     for (const contamine of resultats.contamines || []) {
       await this.bot.envoyerMessagePrive(contamine.jid, msg.mpNotificationContamine());
+    }
+
+    // Notifier les joueurs réellement infectés par le Loup Noir (req4)
+    for (const infecte of resultats.infectesAppliques || []) {
+      await this.bot.envoyerMessagePrive(infecte.jid, msg.mpNotificationInfecte());
+    }
+
+    // Notifier les deux amoureux désignés par Cupidon cette nuit (nuit 1, req3)
+    for (const couple of resultats.amoureux || []) {
+      await this.bot.envoyerMessagePrive(couple.j1.jid,
+        msg.mpNotificationAmoureux(couple.j2.jid, couple.j2.pseudo));
+      await this.bot.envoyerMessagePrive(couple.j2.jid,
+        msg.mpNotificationAmoureux(couple.j1.jid, couple.j1.pseudo));
     }
 
     // Vérifier les conditions de victoire
@@ -521,9 +551,9 @@ class GameManager {
         await this.bot.envoyerMessage(this.groupeJid,
           msg.msgResultatVote(elimine.pseudo, elimine.jid, resultat.maxVotes, resultat.totalVotes));
 
-        // ── Révélation du rôle ──────────────────────────────────────────────
+        // ── Révélation du rôle et de la cause de mort ───────────────────────
         await this.bot.envoyerMessage(this.groupeJid,
-          `🪦 ${jidToMention(elimine.jid)} était *${elimine.role}*`);
+          msg.msgMortCause(elimine.pseudo, elimine.jid, elimine.role, "vote"));
 
         // Vérifier si c'est le Tanneur
         const estTanneur = elimine.role === CONFIG.ROLES.TANNEUR;
@@ -533,7 +563,7 @@ class GameManager {
         if (mort) {
           if (mort.amoureux) {
             await this.bot.envoyerMessage(this.groupeJid,
-              msg.msgMortAmoureux(mort.amoureux.pseudo));
+              msg.msgMortAmoureux(mort.amoureux.pseudo, mort.amoureux.jid, mort.amoureux.role));
           }
 
           // Révélation du Fou au moment du vote
@@ -601,11 +631,15 @@ class GameManager {
               await this.bot.envoyerMessage(this.groupeJid,
                 `👑 Le Maire (${jidToMention(maire.jid)}) a tranché : ${jidToMention(elimine.jid)} est éliminé !`);
 
-              // ── Révélation du rôle ────────────────────────────────────────
+              // ── Révélation du rôle et de la cause de mort ──────────────────
               await this.bot.envoyerMessage(this.groupeJid,
-                `🪦 ${jidToMention(elimine.jid)} était *${elimine.role}*`);
+                msg.msgMortCause(elimine.pseudo, elimine.jid, elimine.role, "maire_departage"));
 
-              this.players.tuer(elimine.id);
+              const mort = this.players.tuer(elimine.id);
+              if (mort?.amoureux) {
+                await this.bot.envoyerMessage(this.groupeJid,
+                  msg.msgMortAmoureux(mort.amoureux.pseudo, mort.amoureux.jid, mort.amoureux.role));
+              }
               await this.verifierFinDeJour();
             }
           });
@@ -655,8 +689,10 @@ class GameManager {
 
   // ==================== ACTIONS SPÉCIALES ====================
 
-  /** Action du Dictateur */
+  /** Action du Dictateur : coup d'État, valable à n'importe quel tour de jour (req2) */
   async actionDictateur(jid, cibleId) {
+    // Le coup d'État ne peut se faire qu'en journée (jour ou phase de vote),
+    // mais à N'IMPORTE QUEL tour de jour de la partie — pas seulement le premier.
     if (this.etat !== ETAT.VOTE && this.etat !== ETAT.JOUR) return false;
     const joueur = this.players.getParJid(jid);
     if (!joueur || joueur.role !== CONFIG.ROLES.DICTATEUR || joueur.aUtiliseDictateur) return false;
@@ -670,9 +706,13 @@ class GameManager {
     this.donnees.aElimineJour = true;
 
     await this.bot.envoyerMessage(this.groupeJid,
-      msg.msgDictateurCoup(cible.pseudo));
+      msg.msgDictateurCoup(cible.pseudo, cible.jid));
 
     const mort = this.players.tuer(cible.id);
+
+    // ── Révélation du rôle et de la cause de mort (req5) ──────────────────
+    await this.bot.envoyerMessage(this.groupeJid,
+      msg.msgMortCause(cible.pseudo, cible.jid, cible.role, "dictateur"));
 
     // Vérifier si la cible était un loup
     if (cible.camp === CONFIG.CAMP.LOUPS) {
@@ -680,53 +720,69 @@ class GameManager {
       this.mayor.elire(joueur.id);
       joueur.estMaire = true;
       await this.bot.envoyerMessage(this.groupeJid,
-        msg.msgDictateurMort("Loup-Garou", joueur.pseudo, cible.pseudo));
+        msg.msgDictateurMort("Loup-Garou", joueur.pseudo, joueur.jid, cible.pseudo, cible.jid));
     } else {
       // Le Dictateur meurt
       await this.bot.envoyerMessage(this.groupeJid,
-        msg.msgDictateurMort("innocent", joueur.pseudo, cible.pseudo));
+        msg.msgDictateurMort("innocent", joueur.pseudo, joueur.jid, cible.pseudo, cible.jid));
       this.players.tuer(joueur.id);
     }
 
-    // ── Révélation du rôle de la cible ──────────────────────────────────────
-    await this.bot.envoyerMessage(this.groupeJid,
-      `🪦 ${jidToMention(cible.jid)} était *${cible.role}*`);
-
     if (mort?.amoureux) {
       await this.bot.envoyerMessage(this.groupeJid,
-        msg.msgMortAmoureux(mort.amoureux.pseudo));
+        msg.msgMortAmoureux(mort.amoureux.pseudo, mort.amoureux.jid, mort.amoureux.role));
     }
 
     await this.verifierFinDeJour();
     return true;
   }
 
-  /** Action du Chasseur (tirer sur quelqu'un après sa mort) */
+  /**
+   * Action du Chasseur (req1) : 2 balles au total, 1 utilisable par nuit,
+   * pour abattre immédiatement le joueur de son choix. La mort est précisée
+   * comme étant causée par le Chasseur (req5).
+   */
   async actionChasseur(jid, cibleId) {
-    const attente = this.actionsEnAttente.find(
-      (a) => a.type === "chasseur" && a.joueur.jid === jid
-    );
-    if (!attente) return false;
+    if (this.etat !== ETAT.NUIT) return false;
+
+    const joueur = this.players.getParJid(jid);
+    if (!joueur || !joueur.estVivant || joueur.role !== CONFIG.ROLES.CHASSEUR) return false;
+    if (joueur.ballesChasseur <= 0) {
+      await this.bot.envoyerMessagePrive(jid, "❌ Tu n'as plus de balles dans ton fusil.");
+      return false;
+    }
+    if (joueur.aTireCetteNuit) {
+      await this.bot.envoyerMessagePrive(jid, "❌ Tu ne peux tirer qu'une seule fois par nuit.");
+      return false;
+    }
 
     const cible = this.players.getParId(cibleId);
-    if (!cible || !cible.estVivant) return false;
+    if (!cible || !cible.estVivant || cible.id === joueur.id) return false;
 
-    // Supprimer l'action en attente
-    this.actionsEnAttente = this.actionsEnAttente.filter((a) => a !== attente);
+    joueur.ballesChasseur -= 1;
+    joueur.aTireCetteNuit = true;
 
     const mort = this.players.tuer(cible.id);
+
+    await this.bot.envoyerMessagePrive(jid, "🔫 Tir effectué !");
+
+    // ── Annonce au groupe : la mort est précisée comme un tir du Chasseur ──
     await this.bot.envoyerMessage(this.groupeJid,
-      msg.msgChasseurTire(cible.pseudo));
-    // ── Révélation du rôle ────────────────────────────────────────────────
+      msg.msgChasseurTire(cible.pseudo, cible.jid, joueur.ballesChasseur));
     await this.bot.envoyerMessage(this.groupeJid,
-      `🪦 ${jidToMention(cible.jid)} était *${cible.role}*`);
+      msg.msgMortCause(cible.pseudo, cible.jid, cible.role, "chasseur"));
 
     if (mort?.amoureux) {
       await this.bot.envoyerMessage(this.groupeJid,
-        msg.msgMortAmoureux(mort.amoureux.pseudo));
+        msg.msgMortAmoureux(mort.amoureux.pseudo, mort.amoureux.jid, mort.amoureux.role));
     }
 
-    await this.verifierFinDeJour();
+    // Une mort en pleine nuit peut déclencher une condition de victoire immédiate
+    const victoire = this.players.verifierVictoire();
+    if (victoire) {
+      await this.terminerPartie(victoire);
+    }
+
     return true;
   }
 
