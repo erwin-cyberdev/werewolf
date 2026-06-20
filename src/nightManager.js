@@ -67,6 +67,7 @@ class NightManager {
     const resultats = {
       morts: [],          // [{ joueur, cause }]
       infectes: [],       // [joueur]
+      infectesAppliques: [], // [joueur] — infections réellement appliquées cette nuit (pour notification)
       contamines: [],     // [joueur]
       vus: [],            // [{ voyant, cible, role }]          — vrais résultats Voyante
       fouVus: [],         // [{ voyant, cible, fauxRole }]     — faux résultats Fou
@@ -329,6 +330,7 @@ class NightManager {
           if (infecteur) {
             playerManager.infecter(cible.id);
             infecteur.infecteur.aUtiliseInfection = true;
+            resultats.infectesAppliques.push(cible);
           } else {
             const mort = playerManager.tuer(cible.id);
             if (mort) {
